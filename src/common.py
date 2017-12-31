@@ -14,6 +14,25 @@ class RegexStyle:
     python = 1
     csharp = 2
 
+
+class ReduceContext:
+    def __init__(self, root_node=None):
+        self._root_node = root_node
+
+    @property
+    def root_node(self):
+        return self._root_node
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        pass
+
+    def scope(self, root_node):
+        return ReduceContext(root_node=root_node)
+
+
 class CompileContext:
     def __init__(self, **kwargs):
         self._buffer = StringIO()

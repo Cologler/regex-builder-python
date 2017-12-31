@@ -47,31 +47,46 @@ class Test(unittest.TestCase):
             '56[0-7]'
         ]))
 
+    def test_ipv4(self):
+        builder = RegexBuilder()
+        expr = builder.int_range(0, 255)
+        expr &= builder.char('.')
+        expr &= builder.int_range(0, 255)
+        expr &= builder.char('.')
+        expr &= builder.int_range(0, 255)
+        expr &= builder.char('.')
+        expr &= builder.int_range(0, 255)
+        self.assertEqual(expr.reduce().compile(), '\\.'.join([
+            '(?:[0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])',
+            '(?:[0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])',
+            '(?:[0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])',
+            '(?:[0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])',
+        ]))
+
+    def test_ipv4_grouped(self):
+        builder = RegexBuilder()
+        expr =  builder.int_range(0, 255).group()
+        expr &= builder.char('.')
+        expr &= builder.int_range(0, 255).group()
+        expr &= builder.char('.')
+        expr &= builder.int_range(0, 255).group()
+        expr &= builder.char('.')
+        expr &= builder.int_range(0, 255).group()
+        self.assertEqual(expr.reduce().compile(), '\\.'.join([
+            '([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])',
+            '([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])',
+            '([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])',
+            '([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])',
+        ]))
+
+    def test_print(self):
+        pass
+
 
 def main(argv=None):
     if argv is None:
         argv = sys.argv
     try:
-        builder = RegexBuilder()
-        exprx  = builder.char('0')
-        exprx |= builder.char('1')
-        exprx |= builder.char('2')
-        exprx |= builder.char('3')
-        exprx |= builder.char('5')
-        exprx |= builder.char('6')
-        exprx |= builder.char('7')
-        exprx |= builder.char('9')
-        exprx |= builder.char(']')
-        exprx |= builder.char('\\')
-        exprx = exprx.repeat(3, None)
-        exprx = exprx.group(capture=False)
-        exprx = exprx.repeat(0, None)
-        exprx |= builder.string('val\\')
-        exprx = exprx.group()
-        exprx |= (builder.digit() & builder.upper_case_letter())
-        exprxr = exprx.reduce()
-        print(exprxr.compile())
-
         unittest.main()
     except Exception:
         traceback.print_exc()

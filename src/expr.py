@@ -8,7 +8,11 @@
 
 from io import StringIO
 
-from .common import RegexStyle, CompileContext
+from .common import (
+    RegexStyle,
+    ReduceContext,
+    CompileContext
+)
 
 class RegexExpr:
     SPEC_CHARS = frozenset('-^\\.?*+[]{}()')
@@ -17,18 +21,15 @@ class RegexExpr:
     def _has_content(self):
         return True
 
-    def _compile(self, context: CompileContext):
-        raise NotImplementedError(type(self))
-
     def __or__(self, other):
         if not isinstance(other, RegexExpr):
             raise TypeError
-        return OrRegexExpr(self, other)
+        return OrRegexExpr(self._auto_group(self), self._auto_group(other))
 
     def __and__(self, other):
         if not isinstance(other, RegexExpr):
             raise TypeError
-        return AndRegexExpr(self, other)
+        return AndRegexExpr(self._auto_group(self), self._auto_group(other))
 
     def compile(self, style: RegexStyle=RegexStyle.python):
         context = CompileContext(
@@ -37,7 +38,14 @@ class RegexExpr:
         self._compile(context)
         return context.buffer.getvalue()
 
+    def _compile(self, context: CompileContext):
+        raise NotImplementedError(type(self))
+
     def reduce(self):
+        context = ReduceContext()
+        return self._reduce(context)
+
+    def _reduce(self, context: ReduceContext):
         return self
 
     def group(self, capture=True):
@@ -47,6 +55,9 @@ class RegexExpr:
         if min is None and max is None:
             return self
         return RepeatedRegexExpr(self, min, max)
+
+    def _auto_group(self, expr):
+        return AutoGroupedRegexExpr(expr)
 
 
 class _EmptyRegexExpr(RegexExpr):
@@ -118,7 +129,7 @@ class CharSeqRegexExpr(RegexExpr):
         self._start = start
         self._end = end
 
-    def reduce(self):
+    def _reduce(self, context: ReduceContext):
         if self._start == self._end:
             return CharRegexExpr(self.start)
         if self._start == self.ord_0 and self._end == self.ord_9:
@@ -173,23 +184,24 @@ class _OpRegexExpr(RegexExpr):
     def exprs(self):
         return self._exprs
 
-    def _reduce_extend_expr(self, cls, expr):
+    def _reduce_extend_expr(self, context: ReduceContext, cls, expr):
         if not expr is EMPTY:
             if isinstance(expr, cls):
                 for e in expr._exprs:
-                    yield from self._reduce_extend_expr(cls, e.reduce())
+                    yield from self._reduce_extend_expr(context, cls, e.reduce())
             else:
-                yield expr.reduce()
+                yield expr._reduce(context)
 
 
 class AndRegexExpr(_OpRegexExpr):
     def __repr__(self):
         return 'AND({})'.format(', '.join(repr(e) for e in self._exprs))
 
-    def reduce(self):
+    def _reduce(self, context: ReduceContext):
         exprs = []
-        for expr in self._exprs:
-            exprs.extend(self._reduce_extend_expr(AndRegexExpr, expr))
+        with context.scope(self) as scoped:
+            for expr in self._exprs:
+                exprs.extend(self._reduce_extend_expr(scoped, AndRegexExpr, expr))
         for idx, expr in enumerate(exprs):
             if isinstance(expr, CharSeqRegexExpr):
                 exprs[idx] = CharsOrRegexExpr(expr).reduce()
@@ -204,10 +216,11 @@ class OrRegexExpr(_OpRegexExpr):
     def __repr__(self):
         return 'OR({})'.format(', '.join(repr(e) for e in self._exprs))
 
-    def reduce(self):
+    def _reduce(self, context: ReduceContext):
         exprs = []
-        for expr in self._exprs:
-            exprs.extend(self._reduce_extend_expr(OrRegexExpr, expr))
+        with context.scope(self) as scoped:
+            for expr in self._exprs:
+                exprs.extend(self._reduce_extend_expr(scoped, OrRegexExpr, expr))
         if not exprs:
             return EMPTY
         if len(exprs) == 1:
@@ -232,7 +245,7 @@ class CharsOrRegexExpr(OrRegexExpr):
     engl = tuple(chr(n) for n in range(ord('a'), ord('z') + 1))
     engu = tuple(chr(n) for n in range(ord('A'), ord('Z') + 1))
 
-    def reduce(self):
+    def _reduce(self, context: ReduceContext):
         check = set()
         exprs = []
         char_exprs = [e for e in self._exprs if isinstance(e, CharRegexExpr)]
@@ -303,15 +316,46 @@ class CharsOrRegexExpr(OrRegexExpr):
         context.buffer.write(']')
 
 
+class AutoGroupedRegexExpr(RegexExpr):
+    AUTO_GROUP_TYPES = frozenset([
+        # type(parent, self)
+        (AndRegexExpr, OrRegexExpr),
+    ])
+
+    def __init__(self, expr):
+        self._expr = expr
+
+    def __repr__(self):
+        return 'AutoGroup({})'.format(repr(self._expr))
+
+    def _reduce(self, context: ReduceContext):
+        expr = self._expr
+        while True:
+            expr = expr._reduce(context)
+            if not isinstance(expr, AutoGroupedRegexExpr):
+                break
+        types = (type(context.root_node), type(expr))
+        if types in self.AUTO_GROUP_TYPES:
+            return self if expr is self._expr else AutoGroupedRegexExpr(expr)
+        else:
+            return expr
+
+    def _compile(self, context: CompileContext):
+        if self._expr._has_content():
+            context.buffer.write('(?:')
+            self._expr._compile(context)
+            context.buffer.write(')')
+
+
 class GroupedRegexExpr(RegexExpr):
     def __init__(self, expr, capture: bool):
         self._expr = expr
         self._capture = capture
 
     def __repr__(self):
-        return '{}({})'.format(type(self).__name__, repr(self._expr))
+        return 'Group({})'.format(repr(self._expr))
 
-    def reduce(self):
+    def _reduce(self, context: ReduceContext):
         expr = self._expr.reduce()
         if expr is self._expr:
             return self
@@ -353,7 +397,7 @@ class RepeatedRegexExpr(RegexExpr):
     def __repr__(self):
         return '{}({})'.format(type(self).__name__, repr(self._expr))
 
-    def reduce(self):
+    def _reduce(self, context: ReduceContext):
         expr = self._expr.reduce()
         if expr is self._expr:
             return self
