@@ -35,8 +35,9 @@ def main(argv=None):
         exprxr = exprx.reduce()
         print(exprxr.compile())
 
-        exprxr = builder.int_range(0, 255).reduce()
-        print(exprxr.compile())
+        builder = RegexBuilder()
+        expr = builder.int_range(13, 255).reduce()
+        print(expr.compile())
     except Exception:
         traceback.print_exc()
 
