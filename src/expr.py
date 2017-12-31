@@ -11,7 +11,7 @@ from io import StringIO
 from .common import RegexStyle, CompileContext
 
 class RegexExpr:
-    SPEC_CHARS = frozenset('-[]^\\.+{}')
+    SPEC_CHARS = frozenset('-^\\.?*+[]{}()')
     ESCAPE_MAP = dict((ord(ch), '\\' + ch) for ch in SPEC_CHARS)
 
     def _has_content(self):
