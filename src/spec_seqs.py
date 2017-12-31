@@ -15,12 +15,6 @@ class DigitCharSeqRegexExpr(CharSeqRegexExpr):
     def __repr__(self):
         return 'CharSeq(0-9)'
 
-    def next(self):
-        raise NotImplementedError
-
-    def prev(self):
-        raise NotImplementedError
-
 
 class LowerCaseLetterCharSeqRegexExpr(CharSeqRegexExpr):
     def __init__(self):
@@ -29,12 +23,6 @@ class LowerCaseLetterCharSeqRegexExpr(CharSeqRegexExpr):
     def __repr__(self):
         return 'CharSeq(a-z)'
 
-    def next(self):
-        raise NotImplementedError
-
-    def prev(self):
-        raise NotImplementedError
-
 
 class UpperCaseLetterCharSeqRegexExpr(CharSeqRegexExpr):
     def __init__(self):
@@ -42,9 +30,3 @@ class UpperCaseLetterCharSeqRegexExpr(CharSeqRegexExpr):
 
     def __repr__(self):
         return 'CharSeq(A-Z)'
-
-    def next(self):
-        raise NotImplementedError
-
-    def prev(self):
-        raise NotImplementedError

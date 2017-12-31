@@ -8,12 +8,16 @@
 
 from io import StringIO
 
+from .common import RegexStyle, CompileContext
+
 class RegexExpr:
+    SPEC_CHARS = frozenset('-[]^\\.+{}')
+    ESCAPE_MAP = dict((ord(ch), '\\' + ch) for ch in SPEC_CHARS)
 
     def _has_content(self):
         return True
 
-    def _compile(self, buffer: StringIO):
+    def _compile(self, context: CompileContext):
         raise NotImplementedError(type(self))
 
     def __or__(self, other):
@@ -26,10 +30,12 @@ class RegexExpr:
             raise TypeError
         return AndRegexExpr(self, other)
 
-    def compile(self):
-        buffer = StringIO()
-        self._compile(buffer)
-        return buffer.getvalue()
+    def compile(self, style: RegexStyle=RegexStyle.python):
+        context = CompileContext(
+            style=style
+        )
+        self._compile(context)
+        return context.buffer.getvalue()
 
     def reduce(self):
         return self
@@ -50,7 +56,7 @@ class _EmptyRegexExpr(RegexExpr):
     def _has_content(self):
         return False
 
-    def _compile(self, buffer: StringIO):
+    def _compile(self, context: CompileContext):
         pass
 
 
@@ -70,12 +76,11 @@ class StringRegexExpr(RegexExpr):
     def value(self):
         return self._text
 
-    def _compile(self, buffer: StringIO):
-        buffer.write(self._text)
+    def _compile(self, context: CompileContext):
+        context.buffer.write(self._text.translate(self.ESCAPE_MAP))
 
 
 class CharRegexExpr(RegexExpr):
-    require_escape = frozenset('-[]^')
 
     def __init__(self, ch):
         if not isinstance(ch, str):
@@ -91,13 +96,18 @@ class CharRegexExpr(RegexExpr):
     def value(self):
         return self._ch
 
-    def _compile(self, buffer: StringIO):
-        if self._ch in self.require_escape:
-            buffer.write('\\')
-        return buffer.write(self._ch)
+    def _compile(self, context: CompileContext):
+        context.buffer.write(self.ESCAPE_MAP.get(ord(self._ch), self._ch))
 
 
 class CharSeqRegexExpr(RegexExpr):
+    ord_0 = ord('0')
+    ord_9 = ord('9')
+    ord_a = ord('a')
+    ord_z = ord('z')
+    ord_A = ord('A')
+    ord_Z = ord('Z')
+
     def __init__(self, start: (str, int), end: (str, int)):
         if isinstance(start, str):
             start = ord(start)
@@ -111,12 +121,22 @@ class CharSeqRegexExpr(RegexExpr):
     def reduce(self):
         if self._start == self._end:
             return CharRegexExpr(self.start)
+        if self._start == self.ord_0 and self._end == self.ord_9:
+            from .spec_seqs import DigitCharSeqRegexExpr
+            return DigitCharSeqRegexExpr()
+        if self._start == self.ord_a and self._end == self.ord_z:
+            from .spec_seqs import LowerCaseLetterCharSeqRegexExpr
+            return LowerCaseLetterCharSeqRegexExpr()
+        if self._start == self.ord_A and self._end == self.ord_Z:
+            from .spec_seqs import UpperCaseLetterCharSeqRegexExpr
+            return UpperCaseLetterCharSeqRegexExpr()
         return self
 
     def __repr__(self):
         return 'CharSeq({}-{})'.format(self.start, self.end)
 
-    def _compile(self, buffer: StringIO):
+    def _compile(self, context: CompileContext):
+        buffer = context.buffer
         buffer.write(self.start)
         buffer.write('-')
         buffer.write(self.end)
@@ -175,9 +195,9 @@ class AndRegexExpr(_OpRegexExpr):
                 exprs[idx] = CharsOrRegexExpr(expr).reduce()
         return AndRegexExpr(*exprs)
 
-    def _compile(self, buffer: StringIO):
+    def _compile(self, context: CompileContext):
         for expr in self._exprs:
-            expr._compile(buffer)
+            expr._compile(context)
 
 
 class OrRegexExpr(_OpRegexExpr):
@@ -196,14 +216,14 @@ class OrRegexExpr(_OpRegexExpr):
             return CharsOrRegexExpr(*exprs).reduce()
         return OrRegexExpr(*exprs)
 
-    def _compile(self, buffer: StringIO):
+    def _compile(self, context: CompileContext):
         hasvalue = False
         for expr in self._exprs:
             if expr._has_content():
                 if hasvalue:
-                    buffer.write('|')
+                    context.buffer.write('|')
                 hasvalue = True
-                expr._compile(buffer)
+                expr._compile(context)
 
 
 class CharsOrRegexExpr(OrRegexExpr):
@@ -247,7 +267,7 @@ class CharsOrRegexExpr(OrRegexExpr):
 
         return CharsOrRegexExpr(exprs)
 
-    def _compiling_shorter(self, sio: StringIO, chars: dict, src: tuple):
+    def _compiling_shorter(self, context: CompileContext, chars: dict, src: tuple):
         in_map = [v in chars for v in src]
         count = in_map.count(True)
         if count > 0:
@@ -263,24 +283,24 @@ class CharsOrRegexExpr(OrRegexExpr):
                 state = b
             for group in groups:
                 if len(group) > 2:
-                    chars[src[group[0]]]._compile(sio)
-                    sio.write('-')
-                    chars[src[group[-1]]]._compile(sio)
+                    chars[src[group[0]]]._compile(context)
+                    context.buffer.write('-')
+                    chars[src[group[-1]]]._compile(context)
                     for i in group:
                         del chars[src[i]]
 
-    def _compile(self, buffer: StringIO):
-        buffer.write('[')
+    def _compile(self, context: CompileContext):
+        context.buffer.write('[')
         chars = dict((e.value, e) for e in self._exprs if isinstance(e, CharRegexExpr))
-        self._compiling_shorter(buffer, chars, self.nums)
-        self._compiling_shorter(buffer, chars, self.engl)
-        self._compiling_shorter(buffer, chars, self.engu)
+        self._compiling_shorter(context, chars, self.nums)
+        self._compiling_shorter(context, chars, self.engl)
+        self._compiling_shorter(context, chars, self.engu)
         for ch in chars:
-            chars[ch]._compile(buffer)
+            chars[ch]._compile(context)
         for expr in self._exprs:
             if not isinstance(expr, CharRegexExpr):
-                expr._compile(buffer)
-        buffer.write(']')
+                expr._compile(context)
+        context.buffer.write(']')
 
 
 class GroupedRegexExpr(RegexExpr):
@@ -300,12 +320,13 @@ class GroupedRegexExpr(RegexExpr):
     def _has_content(self):
         return self._expr._has_content()
 
-    def _compile(self, buffer: StringIO):
+    def _compile(self, context: CompileContext):
+        buffer = context.buffer
         if self._has_content():
             buffer.write('(')
             if not self._capture:
                 buffer.write('?:')
-            self._expr._compile(buffer)
+            self._expr._compile(context)
             buffer.write(')')
 
 
@@ -341,9 +362,10 @@ class RepeatedRegexExpr(RegexExpr):
     def _has_content(self):
         return self._expr._has_content()
 
-    def _compile(self, buffer: StringIO):
+    def _compile(self, context: CompileContext):
         if self._has_content():
-            self._expr._compile(buffer)
+            buffer = context.buffer
+            self._expr._compile(context)
             if self._max is None:
                 if self._min == 0:
                     buffer.write('*')

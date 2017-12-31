@@ -35,7 +35,7 @@ class RegexBuilder:
     def string(self, text: str) -> RegexExpr:
         return StringRegexExpr(text)
 
-    def num_range(self, min_value: int, max_value: int) -> RegexExpr:
+    def int_range(self, min_value: int, max_value: int) -> RegexExpr:
         # for example:
         # (0, 255) -> RegexExpr(
         #     [0-9]                   |
