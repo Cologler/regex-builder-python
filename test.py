@@ -10,6 +10,43 @@ import os
 import sys
 import traceback
 from src.builder import RegexBuilder
+import unittest
+
+
+class Test(unittest.TestCase):
+    def test_int_range(self):
+        builder = RegexBuilder()
+        expr = builder.int_range(0, 255).reduce()
+        self.assertEqual(expr.compile(), '|'.join([
+            '[0-9]',
+            '[1-9][0-9]',
+            '1[0-9][0-9]',
+            '2[0-4][0-9]',
+            '25[0-5]'
+        ]))
+
+        builder = RegexBuilder()
+        expr = builder.int_range(22, 5555).reduce()
+        self.assertEqual(expr.compile(), '|'.join([
+            '2[2-9]',
+            '[3-9][0-9]',
+            '[1-9][0-9][0-9]',
+            '[1-4][0-9][0-9][0-9]',
+            '5[0-4][0-9][0-9]',
+            '55[0-4][0-9]',
+            '555[0-5]'
+        ]))
+
+        builder = RegexBuilder()
+        expr = builder.int_range(210, 567).reduce()
+        self.assertEqual(expr.compile(), '|'.join([
+            '21[0-9]',
+            '2[2-9][0-9]',
+            '[3-4][0-9][0-9]',
+            '5[0-5][0-9]',
+            '56[0-7]'
+        ]))
+
 
 def main(argv=None):
     if argv is None:
@@ -35,9 +72,7 @@ def main(argv=None):
         exprxr = exprx.reduce()
         print(exprxr.compile())
 
-        builder = RegexBuilder()
-        expr = builder.int_range(13, 255).reduce()
-        print(expr.compile())
+        unittest.main()
     except Exception:
         traceback.print_exc()
 
