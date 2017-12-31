@@ -1,6 +1,6 @@
 # regex builder
 
-save you at regex hell.
+save you from regex hell.
 
 ``` cmd
 >>> python
