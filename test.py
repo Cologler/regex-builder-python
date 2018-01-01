@@ -37,6 +37,8 @@ class Test(unittest.TestCase):
         self.assertEqual(expr.reduce().compile(), '[A-Za-z]')
         expr |= builder.char_range(ord('Z'), ord('a'))
         self.assertEqual(expr.reduce().compile(), '[A-z]')
+        expr |= builder.dot()
+        self.assertEqual(expr.reduce().compile(), '.')
 
     def test_int_range(self):
         builder = RegexBuilder()
@@ -115,13 +117,14 @@ class Test(unittest.TestCase):
         print()
         print(colorama.Fore.LIGHTRED_EX + '*' * 60)
         builder = RegexBuilder()
-        expr = builder.int_range(0, 255)
-        expr = expr.repeat(0)
-        print(expr.reduce().compile())
+        expr = builder.char_range('3', '9')
+        expr = expr | builder.dot()
+        expr = expr.repeat(3, 8)
+        print('->', expr)
         print()
-        print(expr.reduce())
+        print('->', expr.reduce())
         print()
-        print(expr)
+        print('->', expr.reduce().compile())
         print('*' * 60 + colorama.Fore.RESET)
 
 

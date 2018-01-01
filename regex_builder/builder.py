@@ -16,10 +16,11 @@ from .expr import (
     StringRegexExpr,
     EMPTY
 )
-from .spec_seqs import (
+from .spec_ranges import (
     DigitCharRangeRegexExpr,
     LowerCaseLetterCharRangeRegexExpr,
-    UpperCaseLetterCharRangeRegexExpr
+    UpperCaseLetterCharRangeRegexExpr,
+    DotCharRangeRegexExpr,
 )
 
 class RegexBuilder:
@@ -43,6 +44,9 @@ class RegexBuilder:
 
     def string(self, text: str) -> RegexExpr:
         return StringRegexExpr(text)
+
+    def dot(self) -> RegexExpr:
+        return DotCharRangeRegexExpr()
 
     def int_range(self, min_value: int, max_value: int) -> RegexExpr:
         # for example:

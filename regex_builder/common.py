@@ -16,7 +16,9 @@ class RegexStyle:
 
 
 class Flags:
-    char = 1
+    char = 0
+    multi_chars = 1
+    single_char = 2
 
 
 class ReduceContext:

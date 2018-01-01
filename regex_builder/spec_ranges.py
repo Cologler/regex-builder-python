@@ -7,28 +7,49 @@
 # ----------
 
 import inspect
-from .expr import CharRangeRegexExpr
+from .common import Flags, CompileContext
+from .expr_abs import ICharRangeRegexExpr, ISingledCharRegexExpr
+from .expr import RegexExpr, CharRangeRegexExpr
 
 class DigitCharRangeRegexExpr(CharRangeRegexExpr):
     def __init__(self):
         super().__init__('0', '9')
 
-    def __repr__(self):
-        return 'CharSeq(0-9)'
 
 class LowerCaseLetterCharRangeRegexExpr(CharRangeRegexExpr):
     def __init__(self):
         super().__init__('a', 'z')
 
-    def __repr__(self):
-        return 'CharSeq(a-z)'
 
 class UpperCaseLetterCharRangeRegexExpr(CharRangeRegexExpr):
     def __init__(self):
         super().__init__('A', 'Z')
 
+
+class DotCharRangeRegexExpr(RegexExpr, ICharRangeRegexExpr, ISingledCharRegexExpr):
+    NOT_CHARS = '\r\n'
+
     def __repr__(self):
-        return 'CharSeq(A-Z)'
+        return 'Dot()'
+
+    def _compile(self, context: CompileContext):
+        context.buffer.write('.')
+
+    def _flag(self, f):
+        return f in (Flags.char, Flags.single_char)
+
+    def has(self, value):
+        return value not in '\r\n'
+
+    def get_order_code(self) -> int:
+        return 0
+
+    def subset(self, other) -> bool:
+        for ch in self.NOT_CHARS:
+            if other.has(ch):
+                return False
+        return True
+
 
 # register all class
 for cls in list(vars().values()):
