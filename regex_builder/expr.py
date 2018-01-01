@@ -292,9 +292,9 @@ class AndRegexExpr(_OpRegexExpr):
         with context.scope(self) as scoped:
             for expr in self._exprs:
                 exprs.extend(self._reduce_extend_expr(scoped, AndRegexExpr, expr))
-        for idx, expr in enumerate(exprs):
-            if isinstance(expr, CharRangeRegexExpr):
-                exprs[idx] = CharsOrRegexExpr(expr).reduce()
+            for idx, expr in enumerate(exprs):
+                if isinstance(expr, CharRangeRegexExpr):
+                    exprs[idx] = CharsOrRegexExpr(expr)._reduce(scoped)
         return AndRegexExpr(*exprs)
 
     def _compile(self, context: CompileContext):
@@ -427,10 +427,11 @@ class GroupedRegexExpr(RegexExpr):
         return 'Group({})'.format(repr(self._expr))
 
     def _reduce(self, context: ReduceContext):
-        expr = self._expr.reduce()
-        if expr is self._expr:
-            return self
-        return GroupedRegexExpr(expr, self._capture)
+        with context.scope(self) as scoped:
+            expr = self._expr._reduce(scoped)
+            if expr is self._expr:
+                return self
+            return GroupedRegexExpr(expr, self._capture)
 
     def _has_content(self):
         return self._expr._has_content()
