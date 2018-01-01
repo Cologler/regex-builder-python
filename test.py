@@ -14,6 +14,16 @@ import unittest
 
 
 class Test(unittest.TestCase):
+    RANGE_VALUES = {
+        (0, 255): '|'.join([
+            '[0-9]',
+            '[1-9][0-9]',
+            '1[0-9][0-9]',
+            '2[0-4][0-9]',
+            '25[0-5]'
+        ])
+    }
+
     def test_base_api(self):
         builder = RegexBuilder()
         self.assertEqual(builder.digit().reduce().compile(), '[0-9]')
@@ -31,13 +41,7 @@ class Test(unittest.TestCase):
     def test_int_range(self):
         builder = RegexBuilder()
         expr = builder.int_range(0, 255).reduce()
-        self.assertEqual(expr.compile(), '|'.join([
-            '[0-9]',
-            '[1-9][0-9]',
-            '1[0-9][0-9]',
-            '2[0-4][0-9]',
-            '25[0-5]'
-        ]))
+        self.assertEqual(expr.compile(), self.RANGE_VALUES[(0, 255)])
 
         builder = RegexBuilder()
         expr = builder.int_range(22, 5555).reduce()
@@ -70,12 +74,9 @@ class Test(unittest.TestCase):
         expr &= builder.int_range(0, 255)
         expr &= builder.char('.')
         expr &= builder.int_range(0, 255)
-        self.assertEqual(expr.reduce().compile(), '\\.'.join([
-            '(?:[0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])',
-            '(?:[0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])',
-            '(?:[0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])',
-            '(?:[0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])',
-        ]))
+        self.assertEqual(expr.reduce().compile(), '\\.'.join(
+            ['(?:{})'.format(self.RANGE_VALUES[(0, 255)])] * 4
+        ))
 
     def test_ipv4_grouped(self):
         builder = RegexBuilder()
@@ -86,12 +87,9 @@ class Test(unittest.TestCase):
         expr &= builder.int_range(0, 255).group()
         expr &= builder.char('.')
         expr &= builder.int_range(0, 255).group()
-        self.assertEqual(expr.reduce().compile(), '\\.'.join([
-            '([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])',
-            '([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])',
-            '([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])',
-            '([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])',
-        ]))
+        self.assertEqual(expr.reduce().compile(), '\\.'.join(
+            ['({})'.format(self.RANGE_VALUES[(0, 255)])] * 4
+        ))
 
     def test_char_range(self):
         builder = RegexBuilder()
@@ -104,6 +102,12 @@ class Test(unittest.TestCase):
         expr |= builder.char('4')
         self.assertEqual(expr.reduce().compile(), '[0-5]')
 
+    def test_auto_group(self):
+        builder = RegexBuilder()
+        expr = builder.int_range(0, 255)
+        expr = expr.repeat(0)
+        self.assertEqual(expr.reduce().compile(), '(?:{})*'.format(self.RANGE_VALUES[(0, 255)]))
+
     def test_print(self):
         return
         import colorama
@@ -111,10 +115,13 @@ class Test(unittest.TestCase):
         print()
         print(colorama.Fore.LIGHTRED_EX + '*' * 60)
         builder = RegexBuilder()
-        expr = builder.lower_case_letter() | builder.upper_case_letter()
-        expr |= builder.char_range(ord('Z'), ord('a'))
+        expr = builder.int_range(0, 255)
+        expr = expr.repeat(0)
         print(expr.reduce().compile())
+        print()
         print(expr.reduce())
+        print()
+        print(expr)
         print('*' * 60 + colorama.Fore.RESET)
 
 

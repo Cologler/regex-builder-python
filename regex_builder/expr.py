@@ -63,7 +63,7 @@ class RegexExpr:
     def repeat(self, min, max=None):
         if min is None and max is None:
             return self
-        return RepeatedRegexExpr(self, min, max)
+        return RepeatedRegexExpr(AutoGroupedRegexExpr(self), min, max)
 
     def _auto_group(self, expr):
         return AutoGroupedRegexExpr(expr)
@@ -379,7 +379,7 @@ class CharsOrRegexExpr(OrRegexExpr):
 
         for expr in combined_range_exprs:
             exprs.append(expr._reduce(context))
-            
+
         return CharsOrRegexExpr(*exprs)
 
     def _compiling_shorter(self, context: CompileContext, chars: dict, src: tuple):
@@ -416,37 +416,6 @@ class CharsOrRegexExpr(OrRegexExpr):
             if not isinstance(expr, CharRegexExpr):
                 expr._compile(context)
         context.buffer.write(']')
-
-
-class AutoGroupedRegexExpr(RegexExpr):
-    AUTO_GROUP_TYPES = frozenset([
-        # type(parent, self)
-        (AndRegexExpr, OrRegexExpr),
-    ])
-
-    def __init__(self, expr):
-        self._expr = expr
-
-    def __repr__(self):
-        return 'AutoGroup({})'.format(repr(self._expr))
-
-    def _reduce(self, context: ReduceContext):
-        expr = self._expr
-        while True:
-            expr = expr._reduce(context)
-            if not isinstance(expr, AutoGroupedRegexExpr):
-                break
-        types = (type(context.parent_node), type(expr))
-        if types in self.AUTO_GROUP_TYPES:
-            return self if expr is self._expr else AutoGroupedRegexExpr(expr)
-        else:
-            return expr
-
-    def _compile(self, context: CompileContext):
-        if self._expr._has_content():
-            context.buffer.write('(?:')
-            self._expr._compile(context)
-            context.buffer.write(')')
 
 
 class GroupedRegexExpr(RegexExpr):
@@ -500,10 +469,11 @@ class RepeatedRegexExpr(RegexExpr):
         return '{}({})'.format(type(self).__name__, repr(self._expr))
 
     def _reduce(self, context: ReduceContext):
-        expr = self._expr.reduce()
-        if expr is self._expr:
-            return self
-        return RepeatedRegexExpr(expr, self._min, self._max)
+        with context.scope(self) as scoped:
+            expr = self._expr._reduce(scoped)
+            if expr is self._expr:
+                return self
+            return RepeatedRegexExpr(expr, self._min, self._max)
 
     def _has_content(self):
         return self._expr._has_content()
@@ -527,3 +497,37 @@ class RepeatedRegexExpr(RegexExpr):
                 buffer.write(',')
                 buffer.write('' if self._max is None else str(self._max))
             buffer.write('}')
+
+
+class AutoGroupedRegexExpr(RegexExpr):
+    AUTO_GROUP_TYPES = frozenset([
+        # type(parent, self)
+        (AndRegexExpr, OrRegexExpr),
+        (RepeatedRegexExpr, OrRegexExpr),
+        (RepeatedRegexExpr, AndRegexExpr),
+    ])
+
+    def __init__(self, expr):
+        self._expr = expr
+
+    def __repr__(self):
+        return 'AutoGroup({})'.format(repr(self._expr))
+
+    def _reduce(self, context: ReduceContext):
+        expr = self._expr
+        while True:
+            expr = expr._reduce(context)
+            if not isinstance(expr, AutoGroupedRegexExpr):
+                break
+        types = (type(context.parent_node), type(expr))
+        #print(types)
+        if types in self.AUTO_GROUP_TYPES:
+            return self if expr is self._expr else AutoGroupedRegexExpr(expr)
+        else:
+            return expr
+
+    def _compile(self, context: CompileContext):
+        if self._expr._has_content():
+            context.buffer.write('(?:')
+            self._expr._compile(context)
+            context.buffer.write(')')
