@@ -14,11 +14,11 @@ from collections import (
 from .common import (
     get_char_code,
     RegexStyle,
-    Flags,
     ReduceContext,
     CompileContext
 )
 from .expr_abs import (
+    ICharRegexExpr,
     ICharRangeRegexExpr,
     ISingledCharRegexExpr,
 )
@@ -28,10 +28,6 @@ ASSERT = True
 class RegexExpr:
     SPEC_CHARS = frozenset('-^\\.?*+[]{}()')
     ESCAPE_MAP = dict((ord(ch), '\\' + ch) for ch in SPEC_CHARS)
-
-    def _flag(self, f: Flags):
-        ''' return expr has spec flag. '''
-        return False
 
     def _has_content(self):
         return True
@@ -111,8 +107,7 @@ class StringRegexExpr(RegexExpr):
         context.buffer.write(self._text.translate(self.ESCAPE_MAP))
 
 
-class CharRegexExpr(RegexExpr):
-
+class CharRegexExpr(RegexExpr, ISingledCharRegexExpr):
     def __init__(self, ch):
         if not isinstance(ch, str):
             raise TypeError('ch must be str type.')
@@ -122,9 +117,6 @@ class CharRegexExpr(RegexExpr):
 
     def __repr__(self):
         return 'Char({})'.format(self._ch)
-
-    def _flag(self, f: Flags):
-        return f in (Flags.char, Flags.single_char)
 
     @property
     def value(self):
@@ -151,9 +143,6 @@ class CharRangeRegexExpr(RegexExpr, ICharRangeRegexExpr):
         end = get_char_code(end)
         assert end >= start
         self._range = _Range(start, end)
-
-    def _flag(self, f):
-        return f in (Flags.char, Flags.multi_chars)
 
     def _reduce(self, context: ReduceContext):
         if self._range.start == self._range.end:
@@ -336,7 +325,7 @@ class OrRegexExpr(_OpRegexExpr):
             return EMPTY
         if len(exprs) == 1:
             return exprs[0]
-        if all(e._flag(Flags.char) for e in exprs):
+        if all(isinstance(e, ICharRegexExpr) for e in exprs):
             return CharsOrRegexExpr(*exprs)._reduce(context)
         return OrRegexExpr(*exprs)
 
@@ -350,7 +339,7 @@ class OrRegexExpr(_OpRegexExpr):
                 expr._compile(context)
 
 
-class CharsOrRegexExpr(OrRegexExpr):
+class CharsOrRegexExpr(OrRegexExpr, ICharRegexExpr):
     ''' expr for `[]` '''
 
     nums = tuple(str(n) for n in range(0, 10))
@@ -359,9 +348,6 @@ class CharsOrRegexExpr(OrRegexExpr):
 
     def __repr__(self):
         return 'CharOR({})'.format(', '.join(repr(e) for e in self._exprs))
-
-    def _flag(self, f: Flags):
-        return f in (Flags.char, Flags.multi_chars)
 
     def _reduce(self, context: ReduceContext):
         check = set()

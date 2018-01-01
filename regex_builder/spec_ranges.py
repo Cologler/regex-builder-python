@@ -7,7 +7,7 @@
 # ----------
 
 import inspect
-from .common import Flags, CompileContext
+from .common import CompileContext
 from .expr_abs import ICharRangeRegexExpr, ISingledCharRegexExpr
 from .expr import RegexExpr, CharRangeRegexExpr
 
@@ -34,9 +34,6 @@ class DotCharRangeRegexExpr(RegexExpr, ICharRangeRegexExpr, ISingledCharRegexExp
 
     def _compile(self, context: CompileContext):
         context.buffer.write('.')
-
-    def _flag(self, f):
-        return f in (Flags.char, Flags.single_char)
 
     def has(self, value):
         return value not in '\r\n'
