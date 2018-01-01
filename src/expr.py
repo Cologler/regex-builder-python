@@ -124,21 +124,21 @@ class CharRegexExpr(RegexExpr):
 
 
 _Range = namedtuple('_Range', ['start', 'end'])
-
+def _has(self, val):
+    return self[0] <= val <= self[1]
+_Range.has = _has
 
 class CharRangeRegexExpr(RegexExpr):
-    ord_0 = ord('0')
-    ord_9 = ord('9')
-    ord_a = ord('a')
-    ord_z = ord('z')
-    ord_A = ord('A')
-    ord_Z = ord('Z')
+    ORD_0_9 = _Range(ord('0'), ord('9'))
+    ORD_a_z = _Range(ord('a'), ord('z'))
+    ORD_A_Z = _Range(ord('A'), ord('Z'))
 
     RANGE_VALUE_MAP = {}
 
     def __init__(self, start: (str, int), end: (str, int)):
         start = get_char_code(start)
         end = get_char_code(end)
+        assert end >= start
         self._range = _Range(start, end)
 
     def _flag(self, f):
@@ -158,11 +158,22 @@ class CharRangeRegexExpr(RegexExpr):
     def __repr__(self):
         return 'CharSeq({}-{})'.format(self.start, self.end)
 
+    def _compile_char(self, context: CompileContext, ch_ord):
+        for r in (self.ORD_0_9, self.ORD_a_z, self.ORD_A_Z):
+            # pylint: disable=E1101
+            if r.has(ch_ord):
+                context.buffer.write(chr(ch_ord))
+                return
+            # pylint: enable=E1101
+
+        context.buffer.write('\\u')
+        context.buffer.write(hex(ch_ord)[2:].upper())
+
     def _compile(self, context: CompileContext):
         buffer = context.buffer
-        buffer.write(self.start)
+        self._compile_char(context, self._range.start)
         buffer.write('-')
-        buffer.write(self.end)
+        self._compile_char(context, self._range.end)
 
     @property
     def range(self):
@@ -181,7 +192,8 @@ class CharRangeRegexExpr(RegexExpr):
         return chr(self._range.end)
 
     def has(self, val):
-        return self._range[0] <= ord(val) <= self._range[1]
+        # pylint: disable=E1101
+        return self._range.has(ord(val))
 
     def is_next(self, val):
         return ord(val) == self._range.end + 1

@@ -14,9 +14,12 @@ import unittest
 
 
 class Test(unittest.TestCase):
-    def test_baseapi(self):
+    def test_base_api(self):
         builder = RegexBuilder()
         self.assertEqual(builder.digit().reduce().compile(), '[0-9]')
+        self.assertEqual(builder.lower_case_letter().reduce().compile(), '[a-z]')
+        self.assertEqual(builder.upper_case_letter().reduce().compile(), '[A-Z]')
+        self.assertEqual(builder.char_range('/u2E80', '/u9FFF').reduce().compile(), '[\\u2E80-\\u9FFF]')
 
     def test_int_range(self):
         builder = RegexBuilder()
