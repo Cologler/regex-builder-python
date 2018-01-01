@@ -156,24 +156,31 @@ class CharRangeRegexExpr(RegexExpr):
         return self
 
     def __repr__(self):
-        return 'Range({}-{})'.format(self.start, self.end)
+        return 'Range({}-{})'.format(
+            self._get_fmt_char(self._range.start),
+            self._get_fmt_char(self._range.end),
+        )
 
-    def _compile_char(self, context: CompileContext, ch_ord):
+    def _get_fmt_char(self, ch_ord, *, context: CompileContext=None):
+        ret = None
         for r in (self.ORD_0_9, self.ORD_a_z, self.ORD_A_Z):
             # pylint: disable=E1101
             if r.has(ch_ord):
-                context.buffer.write(chr(ch_ord))
-                return
+                ret = chr(ch_ord)
+                break
             # pylint: enable=E1101
 
-        context.buffer.write('\\u')
-        context.buffer.write(hex(ch_ord)[2:].upper())
+        if ret is None: # generic unicode
+            ret = '\\u' + hex(ch_ord)[2:].upper()
+
+        if ASSERT:
+            assert isinstance(ret, str)
+        return ret
 
     def _compile(self, context: CompileContext):
-        buffer = context.buffer
-        self._compile_char(context, self._range.start)
-        buffer.write('-')
-        self._compile_char(context, self._range.end)
+        context.buffer.write(self._get_fmt_char(self._range.start, context=context))
+        context.buffer.write('-')
+        context.buffer.write(self._get_fmt_char(self._range.end, context=context))
 
     @property
     def range(self):
@@ -209,6 +216,7 @@ class CharRangeRegexExpr(RegexExpr):
 
     @classmethod
     def combine(cls, items: list) -> list:
+        ''' combine multi CharRangeRegexExpr into a new list. '''
         if len(items) in (0, 1):
             return items
 
