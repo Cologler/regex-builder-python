@@ -51,7 +51,7 @@ class RegexBuilder:
         #     [1-9][0-9]              |
         #     1[0-9][0-9]             |
         #     2[0-4][0-9]             |
-        #     25[0-5]                 |
+        #     25[0-5]
         # )
         # (22, 5555) -> RegexExpr(
         #    2[2-9]                   |
@@ -67,7 +67,7 @@ class RegexBuilder:
         #    2[2-9][0-9]              |
         #    [3-4][0-9][0-9]          |
         #    5[0-5][0-9]              |
-        #    56[0-7]                  |
+        #    56[0-7]
         #
         if not isinstance(min_value, int) or not isinstance(max_value, int):
             raise TypeError
