@@ -379,10 +379,7 @@ class CharsOrRegexExpr(OrRegexExpr):
 
         for expr in combined_range_exprs:
             exprs.append(expr._reduce(context))
-
-        if len(exprs) == len(self._exprs):
-            return self
-
+            
         return CharsOrRegexExpr(*exprs)
 
     def _compiling_shorter(self, context: CompileContext, chars: dict, src: tuple):

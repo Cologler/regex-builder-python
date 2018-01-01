@@ -24,7 +24,7 @@ class Test(unittest.TestCase):
     def test_range_combine(self):
         builder = RegexBuilder()
         expr = builder.lower_case_letter() | builder.upper_case_letter()
-        self.assertEqual(expr.reduce().compile(), '[a-zA-Z]')
+        self.assertEqual(expr.reduce().compile(), '[A-Za-z]')
         expr |= builder.char_range(ord('Z'), ord('a'))
         self.assertEqual(expr.reduce().compile(), '[A-z]')
 
