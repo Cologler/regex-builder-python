@@ -9,7 +9,7 @@
 import os
 import sys
 import traceback
-from src.builder import RegexBuilder
+from regex_builder import RegexBuilder
 import unittest
 
 
