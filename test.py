@@ -21,6 +21,13 @@ class Test(unittest.TestCase):
         self.assertEqual(builder.upper_case_letter().reduce().compile(), '[A-Z]')
         self.assertEqual(builder.char_range('/u2E80', '/u9FFF').reduce().compile(), '[\\u2E80-\\u9FFF]')
 
+    def test_range_combine(self):
+        builder = RegexBuilder()
+        expr = builder.lower_case_letter() | builder.upper_case_letter()
+        self.assertEqual(expr.reduce().compile(), '[a-zA-Z]')
+        expr |= builder.char_range(ord('Z'), ord('a'))
+        self.assertEqual(expr.reduce().compile(), '[A-z]')
+
     def test_int_range(self):
         builder = RegexBuilder()
         expr = builder.int_range(0, 255).reduce()
@@ -98,10 +105,17 @@ class Test(unittest.TestCase):
         self.assertEqual(expr.reduce().compile(), '[0-5]')
 
     def test_print(self):
-        #print('\n===')
-        #builder = RegexBuilder()
-        #print('===')
         return
+        import colorama
+        colorama.init()
+        print()
+        print(colorama.Fore.LIGHTRED_EX + '*' * 60)
+        builder = RegexBuilder()
+        expr = builder.lower_case_letter() | builder.upper_case_letter()
+        expr |= builder.char_range(ord('Z'), ord('a'))
+        print(expr.reduce().compile())
+        print(expr.reduce())
+        print('*' * 60 + colorama.Fore.RESET)
 
 
 def main(argv=None):
