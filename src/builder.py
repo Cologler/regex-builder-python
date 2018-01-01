@@ -6,28 +6,37 @@
 #
 # ----------
 
+from .common import (
+    get_char_code
+)
 from .expr import (
     RegexExpr,
     CharRegexExpr,
-    CharSeqRegexExpr,
+    CharRangeRegexExpr,
     StringRegexExpr,
     EMPTY
 )
 from .spec_seqs import (
-    DigitCharSeqRegexExpr,
-    LowerCaseLetterCharSeqRegexExpr,
-    UpperCaseLetterCharSeqRegexExpr
+    DigitCharRangeRegexExpr,
+    LowerCaseLetterCharRangeRegexExpr,
+    UpperCaseLetterCharRangeRegexExpr
 )
 
 class RegexBuilder:
+    def char_range(self, start: (str, int), end: (str, int)) -> RegexExpr:
+        return CharRangeRegexExpr(start, end)
+
     def digit(self) -> RegexExpr:
-        return DigitCharSeqRegexExpr()
+        ''' return a expr for [0-9]. '''
+        return DigitCharRangeRegexExpr()
 
     def lower_case_letter(self) -> RegexExpr:
-        return LowerCaseLetterCharSeqRegexExpr()
+        ''' return a expr for [a-z]. '''
+        return LowerCaseLetterCharRangeRegexExpr()
 
     def upper_case_letter(self) -> RegexExpr:
-        return UpperCaseLetterCharSeqRegexExpr()
+        ''' return a expr for [A-Z]. '''
+        return UpperCaseLetterCharRangeRegexExpr()
 
     def char(self, ch: str) -> RegexExpr:
         return CharRegexExpr(ch)
@@ -81,7 +90,7 @@ class RegexBuilder:
             start = ord(min_value_str[handling])
             if handling < len(min_value_str) - 1:
                 start += 1
-            cur_expr &= CharSeqRegexExpr(start, '9')
+            cur_expr &= CharRangeRegexExpr(start, '9')
             for _ in range(handling, len(min_value_str) - 1):
                 cur_expr &= self.digit()
             expr |= cur_expr
@@ -89,7 +98,7 @@ class RegexBuilder:
         for length in range(len(min_value_str) + 1, len(max_value_str)):
             for _ in range(0, length):
                 if _ == 0:
-                    cur_expr = CharSeqRegexExpr('1', '9')
+                    cur_expr = CharRangeRegexExpr('1', '9')
                 else:
                     cur_expr &= self.digit()
             expr |= cur_expr
@@ -108,7 +117,7 @@ class RegexBuilder:
                 end -= 1
             for i in range(0, handling):
                 cur_expr &= self.char(max_value_str[i])
-            cur_expr &= CharSeqRegexExpr(start, end)
+            cur_expr &= CharRangeRegexExpr(start, end)
             for i in range(handling + 1, len(max_value_str)):
                 cur_expr &= self.digit()
             expr |= cur_expr

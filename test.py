@@ -14,6 +14,10 @@ import unittest
 
 
 class Test(unittest.TestCase):
+    def test_baseapi(self):
+        builder = RegexBuilder()
+        self.assertEqual(builder.digit().reduce().compile(), '[0-9]')
+
     def test_int_range(self):
         builder = RegexBuilder()
         expr = builder.int_range(0, 255).reduce()

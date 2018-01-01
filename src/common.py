@@ -20,12 +20,17 @@ class Flags:
 
 
 class ReduceContext:
-    def __init__(self, root_node=None):
+    def __init__(self, root_node, *, parent_node=None):
         self._root_node = root_node
+        self._parent_node = parent_node
 
     @property
     def root_node(self):
         return self._root_node
+
+    @property
+    def parent_node(self):
+        return self._parent_node
 
     def __enter__(self):
         return self
@@ -33,8 +38,9 @@ class ReduceContext:
     def __exit__(self, exc_type, exc_value, traceback):
         pass
 
-    def scope(self, root_node):
-        return ReduceContext(root_node=root_node)
+    def scope(self, node):
+        ''' create a scoped ReduceContext for the node. '''
+        return ReduceContext(root_node=self.root_node, parent_node=node)
 
 
 class CompileContext:
@@ -49,3 +55,17 @@ class CompileContext:
     @property
     def style(self):
         return self._style
+
+
+def get_char_code(value) -> int:
+    ''' get unicode code point from a char. '''
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        if len(value) == 1: # case char
+            return ord(value)
+        if value.startswith('/u'): # case unicode
+            return int(value[2:], base=16)
+        raise ValueError
+    else:
+        raise TypeError

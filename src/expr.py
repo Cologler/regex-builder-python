@@ -7,8 +7,10 @@
 # ----------
 
 from io import StringIO
+from collections import namedtuple
 
 from .common import (
+    get_char_code,
     RegexStyle,
     Flags,
     ReduceContext,
@@ -49,7 +51,7 @@ class RegexExpr:
         raise NotImplementedError(type(self))
 
     def reduce(self):
-        context = ReduceContext()
+        context = ReduceContext(self)
         return self._reduce(context)
 
     def _reduce(self, context: ReduceContext):
@@ -121,7 +123,10 @@ class CharRegexExpr(RegexExpr):
         context.buffer.write(self.ESCAPE_MAP.get(ord(self._ch), self._ch))
 
 
-class CharSeqRegexExpr(RegexExpr):
+_Range = namedtuple('_Range', ['start', 'end'])
+
+
+class CharRangeRegexExpr(RegexExpr):
     ord_0 = ord('0')
     ord_9 = ord('9')
     ord_a = ord('a')
@@ -129,28 +134,25 @@ class CharSeqRegexExpr(RegexExpr):
     ord_A = ord('A')
     ord_Z = ord('Z')
 
+    RANGE_VALUE_MAP = {}
+
     def __init__(self, start: (str, int), end: (str, int)):
-        if isinstance(start, str):
-            start = ord(start)
-        assert isinstance(start, int)
-        if isinstance(end, str):
-            end = ord(end)
-        assert isinstance(end, int)
-        self._start = start
-        self._end = end
+        start = get_char_code(start)
+        end = get_char_code(end)
+        self._range = _Range(start, end)
+
+    def _flag(self, f):
+        return f is Flags.char
 
     def _reduce(self, context: ReduceContext):
-        if self._start == self._end:
+        if self._range.start == self._range.end:
             return CharRegexExpr(self.start)
-        if self._start == self.ord_0 and self._end == self.ord_9:
-            from .spec_seqs import DigitCharSeqRegexExpr
-            return DigitCharSeqRegexExpr()
-        if self._start == self.ord_a and self._end == self.ord_z:
-            from .spec_seqs import LowerCaseLetterCharSeqRegexExpr
-            return LowerCaseLetterCharSeqRegexExpr()
-        if self._start == self.ord_A and self._end == self.ord_Z:
-            from .spec_seqs import UpperCaseLetterCharSeqRegexExpr
-            return UpperCaseLetterCharSeqRegexExpr()
+
+        expr = self.RANGE_VALUE_MAP.get(self._range, self)
+
+        if context.root_node is self:
+            return CharsOrRegexExpr(expr)
+
         return self
 
     def __repr__(self):
@@ -163,27 +165,35 @@ class CharSeqRegexExpr(RegexExpr):
         buffer.write(self.end)
 
     @property
+    def range(self):
+        '''
+        return unicode code tuple for char range.
+        for example: CharRange('0', '9').range -> (ord('0'), ord('9'))
+        '''
+        return self._range
+
+    @property
     def start(self):
-        return chr(self._start)
+        return chr(self._range.start)
 
     @property
     def end(self):
-        return chr(self._end)
+        return chr(self._range.end)
 
     def has(self, val):
-        return self._start <= ord(val) <= self._end
+        return self._range[0] <= ord(val) <= self._range[1]
 
     def is_next(self, val):
-        return ord(val) == self._end + 1
+        return ord(val) == self._range.end + 1
 
     def is_prev(self, val):
-        return ord(val) == self._start - 1
+        return ord(val) == self._range.start - 1
 
     def next(self):
-        return CharSeqRegexExpr(self.start, chr(self._end+1))
+        return CharRangeRegexExpr(self.start, chr(self._range.end+1))
 
     def prev(self):
-        return CharSeqRegexExpr(chr(self._start+1), self.end)
+        return CharRangeRegexExpr(chr(self._range.start+1), self.end)
 
 
 class _OpRegexExpr(RegexExpr):
@@ -220,7 +230,7 @@ class AndRegexExpr(_OpRegexExpr):
             for expr in self._exprs:
                 exprs.extend(self._reduce_extend_expr(scoped, AndRegexExpr, expr))
         for idx, expr in enumerate(exprs):
-            if isinstance(expr, CharSeqRegexExpr):
+            if isinstance(expr, CharRangeRegexExpr):
                 exprs[idx] = CharsOrRegexExpr(expr).reduce()
         return AndRegexExpr(*exprs)
 
@@ -277,7 +287,7 @@ class CharsOrRegexExpr(OrRegexExpr):
 
         exprs = []
         char_exprs = [e for e in extend_exprs if isinstance(e, CharRegexExpr)]
-        charseq_exprs = [e for e in extend_exprs if isinstance(e, CharSeqRegexExpr)]
+        charseq_exprs = [e for e in extend_exprs if isinstance(e, CharRangeRegexExpr)]
         assert len(char_exprs) + len(charseq_exprs) == len(extend_exprs)
 
         def reduce_seq(expr):
@@ -362,7 +372,7 @@ class AutoGroupedRegexExpr(RegexExpr):
             expr = expr._reduce(context)
             if not isinstance(expr, AutoGroupedRegexExpr):
                 break
-        types = (type(context.root_node), type(expr))
+        types = (type(context.parent_node), type(expr))
         if types in self.AUTO_GROUP_TYPES:
             return self if expr is self._expr else AutoGroupedRegexExpr(expr)
         else:

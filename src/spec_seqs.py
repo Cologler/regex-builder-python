@@ -6,27 +6,34 @@
 #
 # ----------
 
-from .expr import CharSeqRegexExpr
+import inspect
+from .expr import CharRangeRegexExpr
 
-class DigitCharSeqRegexExpr(CharSeqRegexExpr):
+class DigitCharRangeRegexExpr(CharRangeRegexExpr):
     def __init__(self):
         super().__init__('0', '9')
 
     def __repr__(self):
         return 'CharSeq(0-9)'
 
-
-class LowerCaseLetterCharSeqRegexExpr(CharSeqRegexExpr):
+class LowerCaseLetterCharRangeRegexExpr(CharRangeRegexExpr):
     def __init__(self):
         super().__init__('a', 'z')
 
     def __repr__(self):
         return 'CharSeq(a-z)'
 
-
-class UpperCaseLetterCharSeqRegexExpr(CharSeqRegexExpr):
+class UpperCaseLetterCharRangeRegexExpr(CharRangeRegexExpr):
     def __init__(self):
         super().__init__('A', 'Z')
 
     def __repr__(self):
         return 'CharSeq(A-Z)'
+
+# register all class
+for cls in list(vars().values()):
+    if not inspect.isclass(cls):
+        continue
+    if issubclass(cls, CharRangeRegexExpr) and cls is not CharRangeRegexExpr:
+        ins = cls()
+        CharRangeRegexExpr.RANGE_VALUE_MAP[ins._range] = ins
