@@ -7,7 +7,7 @@
 # ----------
 
 import inspect
-from .common import CompileContext
+from .common import CompileContext, CACHE
 from .expr_abs import ICharRangeRegexExpr, ISingledCharRegexExpr
 from .expr import RegexExpr, CharRangeRegexExpr
 
@@ -52,6 +52,12 @@ class DotCharRangeRegexExpr(RegexExpr, ICharRangeRegexExpr, ISingledCharRegexExp
 for cls in list(vars().values()):
     if not inspect.isclass(cls):
         continue
+
+    if not cls.__module__ == __name__:
+        continue
+
+    ins = cls()
+    CACHE[cls] = ins
+
     if issubclass(cls, CharRangeRegexExpr) and cls is not CharRangeRegexExpr:
-        ins = cls()
         CharRangeRegexExpr.RANGE_VALUE_MAP[ins._range] = ins

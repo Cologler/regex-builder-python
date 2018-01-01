@@ -15,7 +15,8 @@ from .common import (
     get_char_code,
     RegexStyle,
     ReduceContext,
-    CompileContext
+    CompileContext,
+    CACHE
 )
 from .expr_abs import (
     ICharRegexExpr,
@@ -86,8 +87,8 @@ class _EmptyRegexExpr(RegexExpr):
     def _compile(self, context: CompileContext):
         pass
 
-
 EMPTY = _EmptyRegexExpr()
+CACHE[_EmptyRegexExpr] = EMPTY
 
 
 class StringRegexExpr(RegexExpr):

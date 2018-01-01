@@ -10,6 +10,8 @@ from io import StringIO
 from enum import Enum
 from collections import namedtuple
 
+CACHE = {} # a cache reprs for save spaces.
+
 class RegexStyle:
     python = 1
     csharp = 2

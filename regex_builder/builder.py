@@ -7,7 +7,8 @@
 # ----------
 
 from .common import (
-    get_char_code
+    get_char_code,
+    CACHE
 )
 from .expr import (
     RegexExpr,
@@ -29,15 +30,15 @@ class RegexBuilder:
 
     def digit(self) -> RegexExpr:
         ''' return a expr for [0-9]. '''
-        return DigitCharRangeRegexExpr()
+        return CACHE[DigitCharRangeRegexExpr]
 
     def lower_case_letter(self) -> RegexExpr:
         ''' return a expr for [a-z]. '''
-        return LowerCaseLetterCharRangeRegexExpr()
+        return CACHE[LowerCaseLetterCharRangeRegexExpr]
 
     def upper_case_letter(self) -> RegexExpr:
         ''' return a expr for [A-Z]. '''
-        return UpperCaseLetterCharRangeRegexExpr()
+        return CACHE[UpperCaseLetterCharRangeRegexExpr]
 
     def char(self, ch: str) -> RegexExpr:
         return CharRegexExpr(ch)
@@ -46,7 +47,7 @@ class RegexBuilder:
         return StringRegexExpr(text)
 
     def dot(self) -> RegexExpr:
-        return DotCharRangeRegexExpr()
+        return CACHE[DotCharRangeRegexExpr]
 
     def int_range(self, min_value: int, max_value: int) -> RegexExpr:
         # for example:
