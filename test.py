@@ -79,8 +79,22 @@ class Test(unittest.TestCase):
             '([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])',
         ]))
 
+    def test_char_range(self):
+        builder = RegexBuilder()
+        expr =  builder.char('0')
+        expr |= builder.char('1')
+        expr |= builder.char('2')
+        expr |= builder.char('3')
+        expr |= builder.char('5')
+        self.assertEqual(expr.reduce().compile(), '[0-35]')
+        expr |= builder.char('4')
+        self.assertEqual(expr.reduce().compile(), '[0-5]')
+
     def test_print(self):
-        pass
+        #print('\n===')
+        #builder = RegexBuilder()
+        #print('===')
+        return
 
 
 def main(argv=None):

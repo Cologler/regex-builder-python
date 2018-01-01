@@ -10,13 +10,20 @@ from io import StringIO
 
 from .common import (
     RegexStyle,
+    Flags,
     ReduceContext,
     CompileContext
 )
 
+ASSERT = False
+
 class RegexExpr:
     SPEC_CHARS = frozenset('-^\\.?*+[]{}()')
     ESCAPE_MAP = dict((ord(ch), '\\' + ch) for ch in SPEC_CHARS)
+
+    def _flag(self, f: Flags):
+        ''' return expr has spec flag. '''
+        return False
 
     def _has_content(self):
         return True
@@ -103,6 +110,9 @@ class CharRegexExpr(RegexExpr):
     def __repr__(self):
         return 'Char({})'.format(self._ch)
 
+    def _flag(self, f: Flags):
+        return f is Flags.char
+
     @property
     def value(self):
         return self._ch
@@ -178,6 +188,9 @@ class CharSeqRegexExpr(RegexExpr):
 
 class _OpRegexExpr(RegexExpr):
     def __init__(self, *exprs):
+        if ASSERT:
+            for expr in exprs:
+                assert isinstance(expr, RegexExpr)
         self._exprs = exprs
 
     @property
@@ -185,6 +198,10 @@ class _OpRegexExpr(RegexExpr):
         return self._exprs
 
     def _reduce_extend_expr(self, context: ReduceContext, cls, expr):
+        '''
+        reduce and extend expr.
+        if visis cls type expr, continue extend.
+        '''
         if not expr is EMPTY:
             if isinstance(expr, cls):
                 for e in expr._exprs:
@@ -225,8 +242,8 @@ class OrRegexExpr(_OpRegexExpr):
             return EMPTY
         if len(exprs) == 1:
             return exprs[0]
-        if all(isinstance(e, CharRegexExpr) for e in exprs):
-            return CharsOrRegexExpr(*exprs).reduce()
+        if all(e._flag(Flags.char) for e in exprs):
+            return CharsOrRegexExpr(*exprs)._reduce(context)
         return OrRegexExpr(*exprs)
 
     def _compile(self, context: CompileContext):
@@ -245,12 +262,23 @@ class CharsOrRegexExpr(OrRegexExpr):
     engl = tuple(chr(n) for n in range(ord('a'), ord('z') + 1))
     engu = tuple(chr(n) for n in range(ord('A'), ord('Z') + 1))
 
+    def __repr__(self):
+        return 'CharOR({})'.format(', '.join(repr(e) for e in self._exprs))
+
+    def _flag(self, f: Flags):
+        return f is Flags.char
+
     def _reduce(self, context: ReduceContext):
         check = set()
+        extend_exprs = []
+        with context.scope(self) as scoped:
+            for expr in self._exprs:
+                extend_exprs.extend(self._reduce_extend_expr(scoped, CharsOrRegexExpr, expr))
+
         exprs = []
-        char_exprs = [e for e in self._exprs if isinstance(e, CharRegexExpr)]
-        charseq_exprs = [e for e in self._exprs if isinstance(e, CharSeqRegexExpr)]
-        assert len(char_exprs) + len(charseq_exprs) == len(self._exprs)
+        char_exprs = [e for e in extend_exprs if isinstance(e, CharRegexExpr)]
+        charseq_exprs = [e for e in extend_exprs if isinstance(e, CharSeqRegexExpr)]
+        assert len(char_exprs) + len(charseq_exprs) == len(extend_exprs)
 
         def reduce_seq(expr):
             for idx, seq_expr in enumerate(charseq_exprs):
@@ -278,7 +306,7 @@ class CharsOrRegexExpr(OrRegexExpr):
         if len(exprs) == len(self._exprs):
             return self
 
-        return CharsOrRegexExpr(exprs)
+        return CharsOrRegexExpr(*exprs)
 
     def _compiling_shorter(self, context: CompileContext, chars: dict, src: tuple):
         in_map = [v in chars for v in src]

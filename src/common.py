@@ -15,6 +15,10 @@ class RegexStyle:
     csharp = 2
 
 
+class Flags:
+    char = 1
+
+
 class ReduceContext:
     def __init__(self, root_node=None):
         self._root_node = root_node
