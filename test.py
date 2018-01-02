@@ -116,12 +116,15 @@ class Test(unittest.TestCase):
         colorama.init()
         print()
         print(colorama.Fore.LIGHTRED_EX + '*' * 60)
+
         builder = RegexBuilder()
         expr =  builder.char('0')
         expr |= builder.char('1')
         expr |= builder.char('2')
         expr |= builder.char('3')
         expr |= builder.char('5')
+        expr |= builder.char('4')
+
         print('->', expr)
         print()
         print('->', expr.reduce())

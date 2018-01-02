@@ -27,7 +27,7 @@ class UpperCaseLetterCharRangeRegexExpr(CharRangeRegexExpr):
 
 
 class DotCharRangeRegexExpr(RegexExpr, ICharRangeRegexExpr, ISingledCharRegexExpr):
-    NOT_CHARS = '\r\n'
+    NOT_CHARS = [ord(ch) for ch in '\r\n']
 
     def __repr__(self):
         return 'Dot()'

@@ -19,9 +19,11 @@ from .common import (
     CACHE
 )
 from .expr_abs import (
+    Range,
     ICharRegexExpr,
     ICharRangeRegexExpr,
     ISingledCharRegexExpr,
+    IContinuousCharRangeRegexExpr,
 )
 
 ASSERT = True
@@ -108,34 +110,47 @@ class StringRegexExpr(RegexExpr):
         context.buffer.write(self._text.translate(self.ESCAPE_MAP))
 
 
-class CharRegexExpr(RegexExpr, ISingledCharRegexExpr):
+class CharRegexExpr(RegexExpr, ISingledCharRegexExpr, IContinuousCharRangeRegexExpr):
     def __init__(self, ch):
-        if not isinstance(ch, str):
-            raise TypeError('ch must be str type.')
-        if len(ch) != 1:
-            raise ValueError('len of ch must be 1.')
-        self._ch = ch
+        self._ch = get_char_code(ch)
 
     def __repr__(self):
-        return 'Char({})'.format(self._ch)
+        return 'Char({})'.format(chr(self._ch))
 
     @property
     def value(self):
         return self._ch
 
     def _compile(self, context: CompileContext):
-        context.buffer.write(self.ESCAPE_MAP.get(ord(self._ch), self._ch))
+        context.buffer.write(self.ESCAPE_MAP.get(self._ch, chr(self._ch)))
+
+    def has(self, value):
+        return value == self._ch
+
+    def get_order_code(self) -> int:
+        return self._ch
+
+    def subset(self, other) -> bool:
+        return False
+
+    def superset(self, other) -> bool:
+        return other.has(self._ch)
+
+    def combine_with(self, other):
+        if other.has(self._ch + 1):
+            if isinstance(other, IContinuousCharRangeRegexExpr):
+                return CharRangeRegexExpr(self._ch, other.range.end)
+        return NotImplemented
+
+    @property
+    def range(self):
+        return Range(self._ch, self._ch)
 
 
-_Range = namedtuple('_Range', ['start', 'end'])
-def _range_has(self, val):
-    return self[0] <= val <= self[1]
-_Range.has = _range_has
-
-class CharRangeRegexExpr(RegexExpr, ICharRangeRegexExpr):
-    ORD_0_9 = _Range(ord('0'), ord('9'))
-    ORD_A_Z = _Range(ord('A'), ord('Z'))
-    ORD_a_z = _Range(ord('a'), ord('z'))
+class CharRangeRegexExpr(RegexExpr, IContinuousCharRangeRegexExpr):
+    ORD_0_9 = Range(ord('0'), ord('9'))
+    ORD_A_Z = Range(ord('A'), ord('Z'))
+    ORD_a_z = Range(ord('a'), ord('z'))
 
     RANGE_VALUE_MAP = {}
 
@@ -143,7 +158,7 @@ class CharRangeRegexExpr(RegexExpr, ICharRangeRegexExpr):
         start = get_char_code(start)
         end = get_char_code(end)
         assert end >= start
-        self._range = _Range(start, end)
+        self._range = Range(start, end)
 
     def _reduce(self, context: ReduceContext):
         if self._range.start == self._range.end:
@@ -201,25 +216,25 @@ class CharRangeRegexExpr(RegexExpr, ICharRangeRegexExpr):
 
     def has(self, value):
         # pylint: disable=E1101
-        return self._range.has(ord(value))
-
-    def is_next(self, val):
-        return ord(val) == self._range.end + 1
-
-    def is_prev(self, val):
-        return ord(val) == self._range.start - 1
-
-    def next(self):
-        return CharRangeRegexExpr(self.start, chr(self._range.end+1))
-
-    def prev(self):
-        return CharRangeRegexExpr(chr(self._range.start+1), self.end)
+        return self._range.has(value)
 
     def get_order_code(self) -> int:
         return self.range.start
 
     def subset(self, other) -> bool:
         return False
+
+    def superset(self, other) -> bool:
+        return False
+
+    def combine_with(self, other):
+        if isinstance(other, IContinuousCharRangeRegexExpr):
+
+            if self.has(other.range.start):
+                return CharRangeRegexExpr(self.range.start, max(self.range.end, other.range.end))
+            elif self.range.end + 1 == other.range.start:
+                return CharRangeRegexExpr(self.range.start, other.range.end)
+        return NotImplemented
 
     @classmethod
     def combine(cls, items: list) -> list:
@@ -230,9 +245,9 @@ class CharRangeRegexExpr(RegexExpr, ICharRangeRegexExpr):
         ret = []
         items = list(items) # clone
         items = sorted(items, key=lambda x: x.get_order_code())
+
         first = items.pop(0)
         second = items.pop(0)
-
         while True:
             result = cls.combine_two(first, second)
             if ASSERT:
@@ -247,6 +262,7 @@ class CharRangeRegexExpr(RegexExpr, ICharRangeRegexExpr):
             else:
                 ret.extend(result)
                 break
+
         return ret
 
     @classmethod
@@ -259,15 +275,14 @@ class CharRangeRegexExpr(RegexExpr, ICharRangeRegexExpr):
         if left.subset(right):
             return left,
 
-        if isinstance(left, CharRangeRegexExpr) and isinstance(right, CharRangeRegexExpr):
-            if left.range.start > right.range.start:
-                left, right = right, left # keep start of left <= start of right
-            if left.range.has(right.range.start):
-                return CharRangeRegexExpr(left.range.start, max(left.range.end, right.range.end)),
-            elif left.range.end + 1 == right.range.start:
-                return CharRangeRegexExpr(left.range.start, right.range.end),
+        if left.superset(right):
+            return right,
 
-        return left, right
+        ret = left.combine_with(right)
+        if ASSERT:
+            assert ret is NotImplemented or isinstance(ret, ICharRangeRegexExpr)
+
+        return (left, right) if ret is NotImplemented else (ret,)
 
 
 class _OpRegexExpr(RegexExpr):
@@ -291,7 +306,9 @@ class _OpRegexExpr(RegexExpr):
                 for e in expr._exprs:
                     yield from self._reduce_extend_expr(context, cls, e._reduce(context))
             else:
-                yield expr._reduce(context)
+                expr = expr._reduce(context)
+                if not expr is EMPTY:
+                    yield expr
 
 
 class AndRegexExpr(_OpRegexExpr):
@@ -306,7 +323,12 @@ class AndRegexExpr(_OpRegexExpr):
             for idx, expr in enumerate(exprs):
                 if isinstance(expr, CharRangeRegexExpr):
                     exprs[idx] = CharsOrRegexExpr(expr)._reduce(scoped)
-        return AndRegexExpr(*exprs)
+        if not exprs:
+            return EMPTY
+        elif len(exprs) == 1:
+            return exprs[0]
+        else:
+            return AndRegexExpr(*exprs)
 
     def _compile(self, context: CompileContext):
         for expr in self._exprs:
@@ -322,12 +344,17 @@ class OrRegexExpr(_OpRegexExpr):
         with context.scope(self) as scoped:
             for expr in self._exprs:
                 exprs.extend(self._reduce_extend_expr(scoped, OrRegexExpr, expr))
+            for idx, expr in enumerate(exprs):
+                if isinstance(expr, CharRangeRegexExpr):
+                    exprs[idx] = CharsOrRegexExpr(expr)._reduce(scoped)
+
         if not exprs:
             return EMPTY
         if len(exprs) == 1:
             return exprs[0]
         if all(isinstance(e, ICharRegexExpr) for e in exprs):
             return CharsOrRegexExpr(*exprs)._reduce(context)
+
         return OrRegexExpr(*exprs)
 
     def _compile(self, context: CompileContext):
@@ -343,9 +370,9 @@ class OrRegexExpr(_OpRegexExpr):
 class CharsOrRegexExpr(OrRegexExpr, ICharRegexExpr):
     ''' expr for `[]` '''
 
-    nums = tuple(str(n) for n in range(0, 10))
-    engl = tuple(chr(n) for n in range(ord('a'), ord('z') + 1))
-    engu = tuple(chr(n) for n in range(ord('A'), ord('Z') + 1))
+    nums = tuple(n for n in range(0, 10))
+    engl = tuple(n for n in range(ord('a'), ord('z') + 1))
+    engu = tuple(n for n in range(ord('A'), ord('Z') + 1))
 
     def __repr__(self):
         return 'CharOR({})'.format(', '.join(repr(e) for e in self._exprs))
@@ -357,37 +384,13 @@ class CharsOrRegexExpr(OrRegexExpr, ICharRegexExpr):
             for expr in self._exprs:
                 extend_exprs.extend(self._reduce_extend_expr(scoped, CharsOrRegexExpr, expr))
 
-        typed_exprs = defaultdict(list)
+        range_exprs = []
         for expr in extend_exprs:
-            if isinstance(expr, CharRegexExpr):
-                typed_exprs[CharRegexExpr].append(expr)
-            elif isinstance(expr, ICharRangeRegexExpr):
-                typed_exprs[ICharRangeRegexExpr].append(expr)
-            else:
-                assert False, type(expr)
+            if ASSERT:
+                assert isinstance(expr, ICharRangeRegexExpr)
+            range_exprs.append(expr)
 
         exprs = []
-        range_exprs = typed_exprs[ICharRangeRegexExpr]
-
-        def reduce_seq(expr):
-            for idx, seq_expr in enumerate(range_exprs):
-                if seq_expr.has(expr.value):
-                    return True
-                elif seq_expr.is_next(expr.value):
-                    range_exprs[idx] = seq_expr.next()
-                    return True
-                elif seq_expr.is_prev(expr.value):
-                    range_exprs[idx] = seq_expr.prev()
-                    return True
-            return False
-
-        for expr in typed_exprs[CharRegexExpr]:
-            if reduce_seq(expr):
-                continue
-
-            if expr.value not in check:
-                exprs.append(expr._reduce(context))
-                check.add(expr.value)
 
         # combine char range exprs:
         combined_range_exprs = CharRangeRegexExpr.combine(range_exprs)
@@ -397,43 +400,14 @@ class CharsOrRegexExpr(OrRegexExpr, ICharRegexExpr):
 
         if len(exprs) == 1 and isinstance(exprs[0], ISingledCharRegexExpr):
             return exprs[0]
-        return CharsOrRegexExpr(*exprs)
 
-    def _compiling_shorter(self, context: CompileContext, chars: dict, src: tuple):
-        in_map = [v in chars for v in src]
-        count = in_map.count(True)
-        if count > 0:
-            # split by `in`
-            groups = []
-            state = None
-            for i, b in enumerate(in_map):
-                if b:
-                    if state is False or not groups:
-                        groups.append([i])
-                    else:
-                        groups[-1].append(i)
-                state = b
-            for group in groups:
-                if len(group) > 2:
-                    chars[src[group[0]]]._compile(context)
-                    context.buffer.write('-')
-                    chars[src[group[-1]]]._compile(context)
-                    for i in group:
-                        del chars[src[i]]
+        return CharsOrRegexExpr(*exprs)
 
     def _compile(self, context: CompileContext):
         context.buffer.write('[')
-        chars = dict((e.value, e) for e in self._exprs if isinstance(e, CharRegexExpr))
-        self._compiling_shorter(context, chars, self.nums)
-        self._compiling_shorter(context, chars, self.engl)
-        self._compiling_shorter(context, chars, self.engu)
-        for ch in chars:
-            chars[ch]._compile(context)
         for expr in self._exprs:
-            if not isinstance(expr, CharRegexExpr):
-                expr._compile(context)
+            expr._compile(context)
         context.buffer.write(']')
-
 
 class GroupedRegexExpr(RegexExpr):
     def __init__(self, expr, capture: bool):
