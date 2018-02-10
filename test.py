@@ -21,6 +21,17 @@ class Test(unittest.TestCase):
             '1[0-9][0-9]',
             '2[0-4][0-9]',
             '25[0-5]'
+        ]),
+        (1, 65535): '|'.join([
+            '[1-9]',
+            '[1-9][0-9]',
+            '[1-9][0-9][0-9]',
+            '[1-9][0-9][0-9][0-9]',
+            '[1-5][0-9][0-9][0-9][0-9]',
+            '6[0-4][0-9][0-9][0-9]',
+            '65[0-4][0-9][0-9]',
+            '655[0-2][0-9]',
+            '6553[0-5]'
         ])
     }
 
@@ -79,6 +90,11 @@ class Test(unittest.TestCase):
         self.assertEqual(expr.reduce().compile(), '\\.'.join(
             ['(?:{})'.format(self.RANGE_VALUES[(0, 255)])] * 4
         ))
+
+    def test_ipv4_port(self):
+        builder = RegexBuilder()
+        expr = builder.int_range(1, 65535)
+        self.assertEqual(expr.reduce().compile(), self.RANGE_VALUES[(1, 65535)])
 
     def test_ipv4_grouped(self):
         builder = RegexBuilder()
